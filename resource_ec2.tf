@@ -2,6 +2,7 @@ locals {
   user_data = <<EOF
 #!/bin/bash
 echo "Hello Terraform!"
+touch /tmp/userdata.txt
 EOF
 }
 
@@ -10,9 +11,9 @@ resource "aws_instance" "my_instance" {
   instance_type          = "t2.micro"
   subnet_id              = local.instance_subnet_id
   iam_instance_profile   = aws_iam_instance_profile.instance_profile.name
-  key_name               = "my_ssh_key"
+  key_name               = var.ssh_key_name
   vpc_security_group_ids = ["${aws_security_group.my_sg.id}"]
-  associate_public_ip_address = false
+  associate_public_ip_address = true
   lifecycle {
     ignore_changes       = [subnet_id]
   }
@@ -35,19 +36,56 @@ resource "aws_instance" "my_instance" {
   provisioner "file" {
     source      = "scripts/script.sh"
     destination = "/tmp/script.sh"
+    connection {
+      type        = "ssh"
+      user        = var.ssh_user
+      private_key = file(var.ssh_key["aws_dev"])
+      host        = self.public_dns
+    }
   }
 
   provisioner "local-exec" {
-    command = "echo ${aws_instance.my_instance.private_ip} >> instance_details.txt"
+    command = "echo private: ${aws_instance.my_instance.private_ip} > instance_details.txt && echo public: ${aws_instance.my_instance.public_ip} >> instance_details.txt"
+
   }
 
   provisioner "remote-exec" {
     inline = [
       "chmod +x /tmp/script.sh",
-      "/tmp/script.sh",
+      "sudo bash -c /tmp/script.sh",
     ]
+
+    connection {
+      type        = "ssh"
+      user        = var.ssh_user
+      private_key = file(var.ssh_key["aws_dev"])
+      host        = aws_instance.my_instance.public_ip
+      timeout     = "2m"
+    }
+
   }
 
+  provisioner "remote-exec" {
+    inline = [
+      "echo 'Hello World'"
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = var.ssh_user
+      host        = aws_instance.my_instance.public_ip
+      private_key  = file(var.ssh_key["aws_dev"])
+      timeout     = "2m"
+    }
+  }
+
+  provisioner "local-exec" {
+    command = <<EOT
+      echo "[nginx]" > nginx.ini
+      echo "${aws_instance.my_instance.public_ip} ansible_user=${var.ansible_user} ansible_ssh_private_key_file=${var.ssh_key["aws_dev"]}" >> nginx.ini
+      ansible-playbook -u ${var.ansible_user} --private-key ${var.ssh_key["aws_dev"]} -i nginx.ini ansible/playbook.yml
+      EOT
+  }
 }
 
 resource "aws_security_group" "my_sg" {
@@ -61,7 +99,7 @@ resource "aws_security_group_rule" "ssh" {
   protocol          = "tcp"
   from_port         = 22
   to_port           = 22
-  cidr_blocks       = ["172.31.0.0/16"]
+  cidr_blocks       = ["0.0.0.0/0"]
 }
 
 resource "aws_security_group_rule" "http" {

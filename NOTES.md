@@ -25,7 +25,10 @@
 - https://github.com/christianb93/ansible-samples/
 
 ### Examples
-
+- https://github.com/ernesen/Terraform-Ansible 
 - https://gist.github.com/clstokes/7116a368025fe6c7dfef1636df3234cf
 - https://github.com/Kulasangar/terraform-demo
 - https://github.com/terraform-aws-modules/terraform-aws-ec2-instance/blob/master/examples/basic/main.tf
+- https://stackoverflow.com/a/62105461
+- https://stackoverflow.com/a/57782037
+- https://discuss.hashicorp.com/t/how-to-ensure-terraform-fails-if-ansible-fails/4795/5
